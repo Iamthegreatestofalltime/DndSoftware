@@ -1,89 +1,122 @@
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useRef } from "react";
 import MonacoEditor from "@monaco-editor/react";
-import LanguageSelector from "./LanguageSelector"; // Ensure this path is correct
-import { CODE_SNIPPETS, LANGUAGE_VERSIONS } from "./Constants";
-import LivePreview from './LivePreview';
-import transpileCode from './transpileUtils'; // Import the utility function
+import { debounce } from 'lodash';
 
 function Editor() {
-    const [selectedComponent, setSelectedComponent] = useState(null);
-    const [language, setLanguage] = useState("react"); // Set React as the initial language
-    const [code, setCode] = useState(`
-    class App extends React.Component {
-        render() {
-        return <h1>Hello, world!</h1>;
-        }
-    }
+    const [html, setHtml] = useState("<h1>Hello, World!</h1>");
+    const [css, setCss] = useState("h1 { color: red; }");
+    const [javascript, setJavascript] = useState(`
+        console.log('Hello, World!');
+        // Load interact.js from CDN
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js';
+        document.head.appendChild(script);
+        script.onload = function() {
+            // Initialize draggable and resizable on all elements except script, style, head, and body
+            interact('body *:not(script):not(style):not(head):not(body)').draggable({
+                onmove: function (event) {
+                    var target = event.target,
+                        // keep the dragged position in the data-x/data-y attributes
+                        x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx,
+                        y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
 
-    ReactDOM.render(<App />, document.getElementById('root'));
+                    // translate the element
+                    target.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+
+                    // update the position attributes
+                    target.setAttribute('data-x', x);
+                    target.setAttribute('data-y', y);
+                }
+            }).resizable({
+                edges: { left: true, right: true, bottom: true, top: true }
+            }).on('resizemove', function (event) {
+                var target = event.target,
+                    x = (parseFloat(target.getAttribute('data-x')) || 0),
+                    y = (parseFloat(target.getAttribute('data-y')) || 0);
+
+                // update the element's style
+                target.style.width  = event.rect.width + 'px';
+                target.style.height = event.rect.height + 'px';
+
+                // translate when resizing from top or left edges
+                x += event.deltaRect.left;
+                y += event.deltaRect.top;
+
+                target.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+
+                target.setAttribute('data-x', x);
+                target.setAttribute('data-y', y);
+            });
+        };
     `);
+    const iframeRef = useRef(null);
 
-    const initialCode = `
-    import React from 'react';
-    import ReactDOM from 'react-dom';
-
-    const App = () => {
-    return <h1>Hello World!</h1>;
-    };
-
-    ReactDOM.render(<App />, document.getElementById('root'));
-    `;
-
-    const [files, setFiles] = useState({
-    'App.js': { code: initialCode, language: 'javascript' },
-    // ... other files
-    });
-    const [currentFile, setCurrentFile] = useState('App.js');
-
-    const handleSelectComponent = (component) => {
-        setSelectedComponent(component);
-    };
-
-    const handleLanguageChange = (newLanguage) => {
-        setLanguage(newLanguage);
-        setCode(CODE_SNIPPETS[newLanguage]); // This will switch the code snippet when a new language is selected
-    };
-
-    const handleEditorChange = (value, event) => {
-        setCode(value);
-    };
+    const updatePreview = debounce(() => {
+        const srcdoc = `
+            <html>
+                <head>
+                    <style>${css}</style>
+                </head>
+                <body>
+                    ${html}
+                    <script>${javascript}</script>
+                </body>
+            </html>
+        `;
+        if (iframeRef.current) {
+            iframeRef.current.srcdoc = srcdoc;
+        }
+    }, 300);
 
     return (
         <div className="flex flex-col h-screen">
             <header className="flex justify-between bg-teal-400 p-4 text-white">
-                <div>
-                    <button className="mx-2">Export Code</button>
-                    <button className="mx-2">Save</button>
-                </div>
-                <Link to="/" className="mx-2">Home</Link>
+                <button className="mx-2">Export Code</button>
+                <button className="mx-2">Save</button>
             </header>
             <div className="flex flex-grow overflow-hidden">
-                <aside className="w-1/4 bg-blue-200 p-5 overflow-auto">
-                    Section with UI/UX templates
-                </aside>
-                <main className="flex-grow flex flex-col bg-red-300">
-                    <section className="flex-grow p-5 overflow-auto">
-                        Hierarchy of parent and children in return statement
-                    </section>
-                    <main className="flex-grow flex flex-col bg-red-300">
-                        <LanguageSelector language={language} onSelect={handleLanguageChange} />
-                        <MonacoEditor
-                            height="100%"
-                            language={language}
-                            value={files[currentFile].code}
-                            onChange={(value) => setFiles({ ...files, [currentFile]: { ...files[currentFile], code: value } })}
-                            theme="vs-dark"
-                        />
-                        <LivePreview code={transpileCode(files[currentFile].code)} />
-                    </main>
-                </main>
-                <aside className="w-1/4 bg-cyan-300 p-5">
-                    <button className="mb-4">Edit mode/Live build Button</button>
-                    <div className="bg-white flex-grow p-2 overflow-auto">
-                        Live editor/simulator
-                    </div>
-                </aside>
+                <div className="w-1/3">
+                    <MonacoEditor
+                        height="100%"
+                        language="html"
+                        value={html}
+                        onChange={(newHtml) => {
+                            setHtml(newHtml);
+                            updatePreview();
+                        }}
+                        theme="vs-dark"
+                    />
+                </div>
+                <div className="w-1/3">
+                    <MonacoEditor
+                        height="100%"
+                        language="css"
+                        value={css}
+                        onChange={(newCss) => {
+                            setCss(newCss);
+                            updatePreview();
+                        }}
+                        theme="vs-dark"
+                    />
+                </div>
+                <div className="w-1/3">
+                    <MonacoEditor
+                        height="100%"
+                        language="javascript"
+                        value={javascript}
+                        onChange={(newJavascript) => {
+                            setJavascript(newJavascript);
+                            updatePreview();
+                        }}
+                        theme="vs-dark"
+                    />
+                </div>
+                <iframe
+                    ref={iframeRef}
+                    className="flex-grow"
+                    style={{ border: 'none', height: '100%', width: '50%' }}
+                    sandbox="allow-scripts"
+                />
             </div>
         </div>
     );
