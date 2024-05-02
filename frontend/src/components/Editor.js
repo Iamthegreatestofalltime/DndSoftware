@@ -142,22 +142,23 @@ function Editor() {
         setElements(newElements);
         setHtml(newHtml);
     };
-    const debouncedUpdateCss = useCallback(debounce((newCss) => {
+    const debouncedCssUpdate = useCallback(debounce((newCss) => {
         setCss(newCss);
-    }, 300), []);
+    }, 5000), []);
     const handleCssChange = (newCss) => {
         if (newCss !== css) {
+            // Debounce updates to prevent frequent state updates and re-renders
+            debouncedCssUpdate(newCss);
+    
+            // Parse the CSS to update elements' styles
             const cssObj = parseCss(newCss);
             const updatedElements = elements.map(el => {
                 const newStyle = cssObj[`#${el.id}`] || el.style;
                 return { ...el, style: newStyle };
             });
-    
             setElements(updatedElements);
-            setCss(newCss);
         }
-        debouncedUpdateCss(newCss);
-    };       
+    };  
 
     const editorDidMount = useCallback((editor) => {
         monacoRef.current = editor;
