@@ -1,10 +1,62 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { debounce } from 'lodash';
 
 function PropertiesPanel({ selectedElement, updateElementStyle }) {
-    const handleStyleChange = (styleName, value) => {
-        const updatedStyle = { ...selectedElement.style, [styleName]: value };
-        updateElementStyle(selectedElement.id, updatedStyle);
+    const [inputStyles, setInputStyles] = useState({});
+
+    useEffect(() => {
+        console.log('Selected Element Changed', selectedElement); // Debugging line
+        if (selectedElement && selectedElement.style) {
+            const filteredStyles = filterStylesWithValues({...defaultStyles, ...selectedElement.style});
+            setInputStyles(filteredStyles);
+        } else {
+            setInputStyles(defaultStyles);
+        }
+    }, [selectedElement]);
+
+    const defaultStyles = {
+        width: '',
+        height: '',
+        padding: '',
+        margin: '',
+        color: '#000000', // Default for color input
+        borderRadius: '',
+        fontSize: '',
+        backgroundColor: '#ffffff', // Default for color input
+        fontWeight: 'normal'
     };
+
+    const debouncedUpdateStyle = debounce((id, newStyles) => {
+        console.log('Updating styles for element', id, newStyles); // Debugging line
+        if (id) {
+            const cssStyle = convertToCssStyle(newStyles);
+            updateElementStyle(id, cssStyle);
+        }
+    }, 3000);
+
+    const handleStyleChange = (styleName, value) => {
+        console.log('Style change:', styleName, value); // Debugging line
+        const newStyles = { ...inputStyles, [styleName]: value };
+        setInputStyles(newStyles);
+        debouncedUpdateStyle(selectedElement.id, newStyles);
+    };
+
+    function convertToCssStyle(styles) {
+        return Object.keys(styles).reduce((acc, key) => {
+            const cssKey = key.replace(/([A-Z])/g, g => `-${g[0].toLowerCase()}`);
+            acc[cssKey] = styles[key];
+            return acc;
+        }, {});
+    }
+
+    function filterStylesWithValues(styles) {
+        return Object.keys(styles).reduce((acc, key) => {
+            if (styles[key]) { // Only add style if it has a non-empty value
+                acc[key] = styles[key];
+            }
+            return acc;
+        }, {});
+    }
 
     if (!selectedElement) {
         return <div>Select an element to see its properties</div>;
@@ -13,15 +65,16 @@ function PropertiesPanel({ selectedElement, updateElementStyle }) {
     return (
         <div>
             <h3>Properties for: {selectedElement.id}</h3>
-            <div>
-                <label>Width: </label>
-                <input type="text" value={selectedElement.style.width || ''} onChange={(e) => handleStyleChange('width', e.target.value)} />
-            </div>
-            <div>
-                <label>Height: </label>
-                <input type="text" value={selectedElement.style.height || ''} onChange={(e) => handleStyleChange('height', e.target.value)} />
-            </div>
-            {/* Add more style controls as needed */}
+            {Object.keys(defaultStyles).map(key => (
+                <div key={key}>
+                    <label>{key.charAt(0).toUpperCase() + key.slice(1)}:</label>
+                    <input
+                        type={/color/i.test(key) ? 'color' : 'text'}
+                        value={inputStyles[key] || ''}
+                        onChange={(e) => handleStyleChange(key, e.target.value)}
+                    />
+                </div>
+            ))}
         </div>
     );
 }
