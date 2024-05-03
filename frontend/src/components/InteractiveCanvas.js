@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import interact from 'interactjs';
 
-function InteractiveCanvas({ elements, updateElement }) {
+function InteractiveCanvas({ elements, updateElement, onSelect }) {
     useEffect(() => {
         interact('.draggable')
             .draggable({
@@ -44,6 +44,10 @@ function InteractiveCanvas({ elements, updateElement }) {
             }                  
     }, []);
 
+    function handleElementClick(element) {
+        onSelect(element);  // Callback to notify the parent component
+    }
+
     return (
         <div className="canvas" style={{ width: '100%', minHeight: '300px', position: 'relative', backgroundColor: '#f0f0f0' }}>
             {elements.map((el) => {
@@ -53,12 +57,8 @@ function InteractiveCanvas({ elements, updateElement }) {
                     left: el.style.left,
                     top: el.style.top,
                 };
-                return <div key={el.id} id={el.id} className="draggable" style={style}>
-                    {el.tag === 'img' ? (
-                        <img src={el.attrs.src} alt={el.attrs.alt} />
-                    ) : (
-                        el.text
-                    )}
+                return <div key={el.id} id={el.id} className="draggable" style={style} onClick={() => handleElementClick(el)}>
+                    {el.tag === 'img' ? <img src={el.attrs.src} alt={el.attrs.alt} /> : el.text}
                 </div>;
             })}
         </div>

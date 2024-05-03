@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import { debounce } from 'lodash';
 import InteractiveCanvas from './InteractiveCanvas';
+import PropertiesPanel from './PropertiesPanel';
 
 function AddElement({ onAdd }) {
     return (
@@ -43,6 +44,21 @@ function Editor() {
     const [javascript, setJavascript] = useState("");
     const iframeRef = useRef(null);
     const monacoRef = useRef();
+    const [selectedElement, setSelectedElement] = useState(null);
+
+    const handleSelectElement = (element) => {
+        setSelectedElement(element);
+    };
+
+    const updateElementStyle = (id, newStyle) => {
+        const updatedElements = elements.map(el => {
+            if (el.id === id) {
+                return { ...el, style: newStyle };
+            }
+            return el;
+        });
+        setElements(updatedElements);
+    };
 
     const updatePreview = debounce(() => {
         const srcdoc = `
@@ -209,7 +225,8 @@ function Editor() {
                     style={{ border: 'none', height: '100%', width: '50%' }}
                     sandbox="allow-scripts"
                 />
-                <InteractiveCanvas elements={elements} updateElement={updateElement} style={{ width: '100%' }} />
+                <InteractiveCanvas elements={elements} updateElement={updateElement} onSelect={handleSelectElement} />
+                <PropertiesPanel selectedElement={selectedElement} updateElementStyle={updateElementStyle} />
             </div>
         </div>
     );
