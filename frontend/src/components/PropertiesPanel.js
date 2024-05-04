@@ -5,14 +5,21 @@ function PropertiesPanel({ selectedElement, updateElementStyle }) {
     const [inputStyles, setInputStyles] = useState({});
 
     useEffect(() => {
-        console.log('Selected Element Changed', selectedElement); // Debugging line
         if (selectedElement && selectedElement.style) {
-            const filteredStyles = filterStylesWithValues({...defaultStyles, ...selectedElement.style});
-            setInputStyles(filteredStyles);
+            const camelCaseStyles = convertToCamelCase(selectedElement.style);
+            setInputStyles(camelCaseStyles);
         } else {
             setInputStyles(defaultStyles);
         }
-    }, [selectedElement]);
+    }, [selectedElement]);    
+
+    function convertToCamelCase(styles) {
+        return Object.keys(styles).reduce((acc, key) => {
+            const camelCaseKey = key.replace(/-./g, match => match[1].toUpperCase());
+            acc[camelCaseKey] = styles[key];
+            return acc;
+        }, {});
+    }    
 
     const defaultStyles = {
         width: '',

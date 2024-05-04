@@ -27,16 +27,16 @@ function parseCss(cssString) {
                 const styles = declarations.split(';').reduce((acc, declaration) => {
                     const [property, value] = declaration.split(':');
                     if (property && value) {
-                        acc[property.trim()] = value.trim();
+                        acc[property.trim()] = value.trim(); // Keep CSS format here
                     }
                     return acc;
                 }, {});
-                cssObj[selector] = styles;
+                cssObj[selector] = styles; // Store styles in CSS format
             }
         }
     });
     return cssObj;
-}
+} 
 
 function Editor() {
     const [html, setHtml] = useState("<h1>Hello, World!</h1>");
@@ -53,12 +53,13 @@ function Editor() {
     const updateElementStyle = (id, newStyle) => {
         const updatedElements = elements.map(el => {
             if (el.id === id) {
+                console.log("Updating element style for ID:", id, "New Style:", newStyle); // Log style updates
                 return { ...el, style: newStyle };
             }
             return el;
         });
         setElements(updatedElements);
-    };
+    };     
 
     const updatePreview = debounce(() => {
         const srcdoc = `
@@ -161,20 +162,19 @@ function Editor() {
     const debouncedCssUpdate = useCallback(debounce((newCss) => {
         setCss(newCss);
     }, 5000), []);
-    const handleCssChange = (newCss) => {
+    const handleCssChange = useCallback(debounce((newCss) => {
         if (newCss !== css) {
-            // Debounce updates to prevent frequent state updates and re-renders
-            debouncedCssUpdate(newCss);
-    
-            // Parse the CSS to update elements' styles
+            console.log("CSS Edited:", newCss); // Log raw CSS input
+            setCss(newCss);
             const cssObj = parseCss(newCss);
+            console.log("Parsed CSS Object:", cssObj); // Log parsed CSS object
             const updatedElements = elements.map(el => {
                 const newStyle = cssObj[`#${el.id}`] || el.style;
                 return { ...el, style: newStyle };
             });
             setElements(updatedElements);
         }
-    };  
+    }, 3000), [css, elements]);    
 
     const editorDidMount = useCallback((editor) => {
         monacoRef.current = editor;
