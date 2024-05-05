@@ -1,17 +1,45 @@
 import React, { useEffect, useState } from 'react';
 import { debounce } from 'lodash';
 
-function PropertiesPanel({ selectedElement, updateElementStyle }) {
+function PropertiesPanel({ selectedElement, updateElementStyle, updateElementText, updateElementSrc }) {
     const [inputStyles, setInputStyles] = useState({});
+    const [textContent, setTextContent] = useState('');
+    const [imageSrc, setImageSrc] = useState('');
 
     useEffect(() => {
-        if (selectedElement && selectedElement.style) {
+        if (selectedElement) {
+            if (selectedElement.tag === 'img') {
+                setImageSrc(selectedElement.attrs.src || '');
+            }
             const camelCaseStyles = convertToCamelCase(selectedElement.style);
             setInputStyles(camelCaseStyles);
+            setTextContent(selectedElement.text || '');
         } else {
             setInputStyles(defaultStyles);
         }
-    }, [selectedElement]);    
+    }, [selectedElement]);
+
+    const handleImageSrcChange = (event) => {
+        setImageSrc(event.target.value);
+        updateElementSrc(selectedElement.id, event.target.value);
+    };
+
+    const handleImageUpload = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setImageSrc(e.target.result);
+                updateElementSrc(selectedElement.id, e.target.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleTextChange = (event) => {
+        setTextContent(event.target.value);
+        updateElementText(selectedElement.id, event.target.value);
+    };
 
     function convertToCamelCase(styles) {
         return Object.keys(styles).reduce((acc, key) => {
@@ -82,6 +110,21 @@ function PropertiesPanel({ selectedElement, updateElementStyle }) {
                     />
                 </div>
             ))}
+            {/* Add text content editing for elements that can have text */}
+            {selectedElement.tag !== 'img' && (
+                <div>
+                    <label>Text Content:</label>
+                    <textarea value={textContent} onChange={handleTextChange} />
+                </div>
+            )}
+            {selectedElement.tag === 'img' && (
+                <div>
+                    <label>Image URL:</label>
+                    <input type="text" value={imageSrc} onChange={handleImageSrcChange} />
+                    <label>Or upload image:</label>
+                    <input type="file" onChange={handleImageUpload} />
+                </div>
+            )}
         </div>
     );
 }

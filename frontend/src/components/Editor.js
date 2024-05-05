@@ -59,7 +59,16 @@ function Editor() {
             return el;
         });
         setElements(updatedElements);
-    };     
+    };    
+    
+    const updateElementText = (id, newText) => {
+        setElements(prevElements => prevElements.map(el => {
+            if (el.id === id) {
+                return { ...el, text: newText };
+            }
+            return el;
+        }));
+    };    
 
     const updatePreview = debounce(() => {
         const srcdoc = `
@@ -145,23 +154,31 @@ function Editor() {
     const handleHtmlChange = (newHtml) => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(newHtml, 'text/html');
-    
-        // Assuming elements are identified by their `id`
         const newElements = Array.from(doc.body.children).map(el => {
             const id = el.id;
             const existingElement = elements.find(e => e.id === id);
             if (existingElement) {
                 return { ...existingElement, text: el.textContent };
             }
-            return null; // or handle new elements if necessary
+            return null; // Handle new elements if necessary
         }).filter(e => e !== null);
-    
         setElements(newElements);
         setHtml(newHtml);
     };
+
     const debouncedCssUpdate = useCallback(debounce((newCss) => {
         setCss(newCss);
     }, 5000), []);
+
+    const updateElementSrc = (id, newSrc) => {
+        setElements(prevElements => prevElements.map(el => {
+            if (el.id === id && el.tag === 'img') {
+                return { ...el, attrs: {...el.attrs, src: newSrc} };
+            }
+            return el;
+        }));
+    };    
+
     const handleCssChange = useCallback(debounce((newCss) => {
         if (newCss !== css) {
             console.log("CSS Edited:", newCss); // Log raw CSS input
@@ -226,7 +243,12 @@ function Editor() {
                     sandbox="allow-scripts"
                 />
                 <InteractiveCanvas elements={elements} updateElement={updateElement} onSelect={handleSelectElement} />
-                <PropertiesPanel selectedElement={selectedElement} updateElementStyle={updateElementStyle} />
+                <PropertiesPanel
+                    selectedElement={selectedElement}
+                    updateElementStyle={updateElementStyle}
+                    updateElementText={updateElementText}
+                    updateElementSrc={updateElementSrc}
+                />
             </div>
         </div>
     );
