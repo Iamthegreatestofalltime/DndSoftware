@@ -3,6 +3,9 @@ import MonacoEditor from '@monaco-editor/react';
 import { debounce } from 'lodash';
 import InteractiveCanvas from './InteractiveCanvas';
 import PropertiesPanel from './PropertiesPanel';
+import { Resizable } from 're-resizable';
+import '../App.css';
+import TemplateLibrary from './TemplateLibrary';
 
 function AddElement({ onAdd }) {
     return (
@@ -11,6 +14,8 @@ function AddElement({ onAdd }) {
             <button onClick={() => onAdd('p', 'Sample text paragraph.')}>Add Paragraph</button>
             <button onClick={() => onAdd('button', 'Click Me', { type: 'button', onclick: "alert('Button clicked!');" })}>Add Button</button>
             <button onClick={() => onAdd('img', null, { src: 'https://via.placeholder.com/150', alt: 'Placeholder Image' })}>Add Image</button>
+            <button onClick={() => onAdd('div', 'Editable Div' )}>Add Div</button>
+            <button onClick={() => onAdd('section', 'Editable Section')}>Add Section</button>
         </div>
     );
 }
@@ -46,8 +51,28 @@ function Editor() {
     const monacoRef = useRef();
     const [selectedElement, setSelectedElement] = useState(null);
 
+    const handleDrop = (e) => {
+        e.preventDefault();
+        const templateType = e.dataTransfer.getData("templateType");
+        const newElement = createTemplateElement(templateType);
+        setElements([...elements, newElement]);
+    };
+
+    const handleDragOver = (e) => {
+        e.preventDefault();  // This allows us to drop.
+    }
+
     const handleSelectElement = (element) => {
         setSelectedElement(element);
+    };
+
+    const createTemplateElement = (templateType) => {
+        // Based on the type, return a new element object
+        if (templateType === 'TextImageSection') {
+            return { type: 'TextImageSection', props: { text: 'Editable text', imageUrl: 'https://via.placeholder.com/150' }};
+        } else if (templateType === 'SideScrollingWidget') {
+            return { type: 'SideScrollingWidget', props: { content: 'Editable content' }};
+        }
     };
 
     const updateElementStyle = (id, newStyle) => {
@@ -134,7 +159,6 @@ function Editor() {
 
     const handleAddElement = (tag, text, attrs = {}) => {
         const id = `element-${Date.now()}`;
-
         const newElement = {
             id,
             tag,
@@ -142,33 +166,53 @@ function Editor() {
             attrs,
             style: { position: 'absolute', left: '50px', top: '50px' } // Default styles
         };
+        // Update elements state first
         setElements(prevElements => [...prevElements, newElement]);
+        // Then update the HTML by appending the new element
         const attributeString = Object.entries(attrs).map(([key, value]) => `${key}="${value}"`).join(' ');
         const elementString = tag === 'img' || tag === 'input'
-            ? `<${tag} ${attributeString} />`
-            : `<${tag} ${attributeString}>${text}</${tag}>`;
+            ? `<${tag} id="${id}" ${attributeString} />`
+            : `<${tag} id="${id}" ${attributeString}>${text}</${tag}>`;
         const newHtml = `${html}\n${elementString}`;
         setHtml(newHtml);
-    };
+    };    
 
-    const handleHtmlChange = (newHtml) => {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(newHtml, 'text/html');
-        const newElements = Array.from(doc.body.children).map(el => {
-            const id = el.id;
-            const existingElement = elements.find(e => e.id === id);
-            if (existingElement) {
-                return { ...existingElement, text: el.textContent };
-            }
-            return null; // Handle new elements if necessary
-        }).filter(e => e !== null);
-        setElements(newElements);
-        setHtml(newHtml);
-    };
+    const debouncedUpdateHtml = useCallback(debounce((newHtml) => {
+        if (newHtml !== html) {
+            setHtml(newHtml);
+            updatePreview();
+        }
+    }, 3000), [html, updatePreview]);
 
-    const debouncedCssUpdate = useCallback(debounce((newCss) => {
-        setCss(newCss);
-    }, 5000), []);
+    const handleHtmlChange = useCallback(debounce((newHtml) => {
+        if (newHtml !== html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(newHtml, 'text/html');
+            const newElements = Array.from(doc.body.children).map(el => {
+                const id = el.id || `element-${Date.now()}`; // Ensure each element has an ID
+                const tag = el.tagName.toLowerCase();
+                const text = el.textContent;
+                const attrs = {};
+                Array.from(el.attributes).forEach(attr => {
+                    attrs[attr.name] = attr.value;
+                });
+                let existingElement = elements.find(e => e.id === id);
+                let style = existingElement ? existingElement.style : { position: 'absolute', left: '50px', top: '50px' }; // Apply default style if new
+                if (!existingElement) {
+                    // If it's a new element not previously managed, initialize it properly
+                    existingElement = { id, tag, attrs, text, style };
+                    setElements(prevElements => [...prevElements, existingElement]); // Add to elements array if it's new
+                } else {
+                    // Update existing element's text and attributes only
+                    existingElement = { ...existingElement, tag, attrs, text, style };
+                }
+                return existingElement;
+            });
+    
+            setElements(newElements); // Update the elements state
+            debouncedUpdateHtml(newHtml);
+        }
+    }, 3000), [html]);   
 
     const updateElementSrc = (id, newSrc) => {
         setElements(prevElements => prevElements.map(el => {
@@ -206,36 +250,49 @@ function Editor() {
             </header>
             <AddElement onAdd={handleAddElement} />
             <div className="flex flex-grow overflow-hidden">
-                <div style={{width: '50%'}}>
-                    <div style={{ height: '33%' }}>
-                    <MonacoEditor
-                        height="100%"
-                        language="html"
-                        value={html}
-                        onChange={handleHtmlChange}
-                        theme="vs-dark"
-                    />
-                    </div>
-                    <div style={{ height: '33%' }}>
+                <Resizable
+                    defaultSize={{
+                        width: '50%',
+                        height: '100%',
+                    }}
+                    style={{ display: 'flex', flexDirection: 'column' }}
+                >
+                    <Resizable
+                        defaultSize={{
+                            width: '100%',
+                            height: '33%',
+                        }}
+                    >
+                        <MonacoEditor
+                            height="100%"
+                            language="html"
+                            value={html}
+                            onChange={handleHtmlChange}
+                            theme="vs-dark"
+                        />
+                    </Resizable>
+                    <Resizable
+                        defaultSize={{
+                            width: '100%',
+                            height: '33%',
+                        }}
+                    >
                         <MonacoEditor
                             height="100%"
                             language="css"
                             value={css}
                             onChange={handleCssChange}
                             theme="vs-dark"
-                            editorDidMount={editorDidMount}
                         />
-                    </div>
-                    <div style={{ height: '33%' }}>
-                        <MonacoEditor
-                            height="100%"
-                            language="javascript"
-                            value={javascript}
-                            onChange={newJavascript => setJavascript(newJavascript)}
-                            theme="vs-dark"
-                        />
-                    </div>
-                </div>
+                    </Resizable>
+                    <MonacoEditor
+                        height="100%"
+                        language="javascript"
+                        value={javascript}
+                        onChange={newJavascript => setJavascript(newJavascript)}
+                        theme="vs-dark"
+                    />
+                </Resizable>
                 <iframe
                     ref={iframeRef}
                     className="flex-grow"
@@ -249,6 +306,9 @@ function Editor() {
                     updateElementText={updateElementText}
                     updateElementSrc={updateElementSrc}
                 />
+                <TemplateLibrary onAddTemplate={(e, type) => {
+                    e.dataTransfer.setData("templateType", type);
+                }} />
             </div>
         </div>
     );
