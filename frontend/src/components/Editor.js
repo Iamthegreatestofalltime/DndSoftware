@@ -43,6 +43,77 @@ function parseCss(cssString) {
     return cssObj;
 } 
 
+function parseHtml(htmlString) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+    const body = doc.body;
+
+    function recurseElement(element) {
+        console.log('Processing element:', element.tagName);  // Log the tag being processed
+        return Array.from(element.childNodes).filter(node => node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE).map(node => {
+            const attrs = Array.from(node.attributes || []).reduce((acc, attr) => ({
+                ...acc,
+                [attr.name]: attr.value
+            }), {});
+            let content = '';
+            if (node.nodeType === Node.ELEMENT_NODE) {
+                content = node.childNodes.length > 0 ? recurseElement(node) : node.textContent.trim();
+            } else if (node.nodeType === Node.TEXT_NODE) {
+                content = node.textContent.trim();  // Handle text nodes directly
+            }
+            console.log(`Tag: ${node.tagName || 'TEXT'}, Content: '${content}'`);  // Log the content of each node
+            return {
+                tag: node.tagName ? node.tagName.toLowerCase() : 'text',
+                attrs: attrs,
+                content: content
+            };
+        });
+    }
+
+    return recurseElement(body);
+}
+
+function convertToReactComponents(parsedHtml, cssObj) {
+    function convertNode(node) {
+        const { tag, attrs, content } = node;
+        const reactAttrs = Object.entries(attrs).map(([key, value]) => {
+            if (key.toLowerCase() === 'class') { // Convert "class" to "className"
+                return `className="${value}"`;
+            } else if (key.toLowerCase() === 'style') {
+                return ''; // Ignore inline style attributes, handled separately
+            }
+            return `${key}="${value}"`;
+        }).join(' ');
+    
+        const styles = cssObj[`#${attrs.id}`] || {};
+        const styleString = Object.keys(styles).length > 0 ? `style={{${Object.entries(styles).map(([prop, val]) => `${camelCase(prop)}: "${val}"`).join(', ')}}}` : '';
+    
+        if (tag === 'text') {
+            // Directly return text content for text nodes
+            return content;
+        } else if (Array.isArray(content) && content.length > 0) {
+            return `<${tag} ${reactAttrs} ${styleString}>
+                ${content.map(convertNode).join('')}
+            </${tag}>`;
+        }
+    
+        return `<${tag} ${reactAttrs} ${styleString}>${content || ''}</${tag}>`;
+    }      
+
+    const componentBody = parsedHtml.map(convertNode).join('\n');
+    return `
+        return (
+            <>
+                ${componentBody}
+            </>
+        );
+    `;
+}
+
+function camelCase(str) {
+    return str.replace(/-([a-z])/g, function (g) { return g[1].toUpperCase(); });
+}
+
 function Editor() {
     const [html, setHtml] = useState("<h1>Hello, World!</h1>");
     const [css, setCss] = useState("h1 { color: red; }");
@@ -50,6 +121,20 @@ function Editor() {
     const iframeRef = useRef(null);
     const monacoRef = useRef();
     const [selectedElement, setSelectedElement] = useState(null);
+    const [reactCode, setReactCode] = useState("");
+    const sampleHtml = '<div><h1 id="element-1715354741230">Hello, World!</h1></div>';
+    const sampleCss = '#element-1715354741230 { position: absolute; left: 51.5389px; top: 156.96px; }';
+    const parsedHtml = parseHtml(sampleHtml);
+    const parsedCss = parseCss(sampleCss);
+    console.log(convertToReactComponents(parsedHtml, parsedCss));
+
+    const exportToReact = useCallback(() => {
+        const parsedHtml = parseHtml(html);
+        const parsedCss = parseCss(css);
+        const reactComponents = convertToReactComponents(parsedHtml, parsedCss);
+        setReactCode(reactComponents);
+        console.log("React Components:", reactComponents);
+    }, [html, css]);
 
     const handleDrop = (e) => {
         e.preventDefault();
@@ -247,6 +332,7 @@ function Editor() {
             <header className="flex justify-between bg-teal-400 p-4 text-white">
                 <button className="mx-2">Export Code</button>
                 <button className="mx-2">Save</button>
+                <button onClick={exportToReact} className="mx-2">Convert Code</button>
             </header>
             <AddElement onAdd={handleAddElement} />
             <div className="flex flex-grow overflow-hidden">
@@ -257,39 +343,32 @@ function Editor() {
                     }}
                     style={{ display: 'flex', flexDirection: 'column' }}
                 >
-                    <Resizable
-                        defaultSize={{
-                            width: '100%',
-                            height: '33%',
-                        }}
-                    >
-                        <MonacoEditor
-                            height="100%"
-                            language="html"
-                            value={html}
-                            onChange={handleHtmlChange}
-                            theme="vs-dark"
-                        />
-                    </Resizable>
-                    <Resizable
-                        defaultSize={{
-                            width: '100%',
-                            height: '33%',
-                        }}
-                    >
-                        <MonacoEditor
-                            height="100%"
-                            language="css"
-                            value={css}
-                            onChange={handleCssChange}
-                            theme="vs-dark"
-                        />
-                    </Resizable>
+                    <MonacoEditor
+                        height="100%"
+                        language="html"
+                        value={html}
+                        onChange={setHtml}
+                        theme="vs-dark"
+                    />
+                    <MonacoEditor
+                        height="100%"
+                        language="css"
+                        value={css}
+                        onChange={setCss}
+                        theme="vs-dark"
+                    />
                     <MonacoEditor
                         height="100%"
                         language="javascript"
                         value={javascript}
-                        onChange={newJavascript => setJavascript(newJavascript)}
+                        onChange={setJavascript}
+                        theme="vs-dark"
+                    />
+                    <MonacoEditor
+                        height="100%"
+                        language="javascript"
+                        value={reactCode}
+                        options={{ readOnly: false }}
                         theme="vs-dark"
                     />
                 </Resizable>
@@ -306,9 +385,6 @@ function Editor() {
                     updateElementText={updateElementText}
                     updateElementSrc={updateElementSrc}
                 />
-                <TemplateLibrary onAddTemplate={(e, type) => {
-                    e.dataTransfer.setData("templateType", type);
-                }} />
             </div>
         </div>
     );
