@@ -1,3 +1,4 @@
+/* global Babel */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import { debounce } from 'lodash';
@@ -122,11 +123,6 @@ function Editor() {
     const monacoRef = useRef();
     const [selectedElement, setSelectedElement] = useState(null);
     const [reactCode, setReactCode] = useState("");
-    const sampleHtml = '<div><h1 id="element-1715354741230">Hello, World!</h1></div>';
-    const sampleCss = '#element-1715354741230 { position: absolute; left: 51.5389px; top: 156.96px; }';
-    const parsedHtml = parseHtml(sampleHtml);
-    const parsedCss = parseCss(sampleCss);
-    console.log(convertToReactComponents(parsedHtml, parsedCss));
 
     const exportToReact = useCallback(() => {
         const parsedHtml = parseHtml(html);
@@ -180,24 +176,60 @@ function Editor() {
         }));
     };    
 
-    const updatePreview = debounce(() => {
-        const srcdoc = `
-            <html>
-                <head>
-                    <style>${css}</style>
-                </head>
-                <body>
-                    ${html}
-                    <script>${javascript}</script>
-                </body>
-            </html>
-        `;
-        if (iframeRef.current) {
-            iframeRef.current.srcdoc = srcdoc;
+    const updatePreview = useCallback(() => {
+        console.log("Updating preview for reactCode:", reactCode);
+        try {
+            // Manually adjust the code to not use import statements
+            let preparedCode = reactCode.replace(/import\s+\{[^}]+\}\s+from\s+'react';?/g, '');  // Remove any React import statements
+            preparedCode = `
+                var React = window.React;  // Assume React is loaded globally
+                var ReactDOM = window.ReactDOM;  // Assume ReactDOM is loaded globally
+                ${preparedCode}
+                ReactDOM.render(<App />, document.getElementById('root'));
+            `;
+    
+            const transpiledCode = Babel.transform(preparedCode, {
+                presets: ['react']  // Use React preset to handle JSX
+            }).code;
+    
+            console.log("Transpiled code:", transpiledCode);
+    
+            const srcdoc = `
+                <html>
+                    <head>
+                        <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+                        <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+                        <style>${css}</style>
+                    </head>
+                    <body>
+                        <div id="root"></div>
+                        <script type="text/javascript">
+                            ${transpiledCode}
+                        </script>
+                    </body>
+                </html>
+            `;
+    
+            if (iframeRef.current) {
+                iframeRef.current.srcdoc = srcdoc;
+            }
+        } catch (error) {
+            console.error("Error in transpiling React code:", error);
         }
-    }, 300);
+    }, [reactCode, css]);          
 
     const [elements, setElements] = useState([]);
+
+    function convertReactToHtmlCss(reactCode) {
+        const jsx = reactCode; // This would be the React code you get from your editor
+        // Here you would parse the JSX to HTML and extract CSS
+        // This is a simplified and not fully functional parser
+        const html = jsx.replace(/<([A-Z][A-Za-z]*)\s?([^>]*)>/g, '<div $2>').replace(/<\/[A-Z][A-Za-z]*>/g, '</div>');
+        const css = ""; // You would need to extract styles and convert them to CSS here
+
+        console.log('Converted HTML:', html);
+        console.log('Converted CSS:', css);
+    }
 
     const generateHtml = (elements) => {
         return elements.map(el => {
@@ -333,6 +365,7 @@ function Editor() {
                 <button className="mx-2">Export Code</button>
                 <button className="mx-2">Save</button>
                 <button onClick={exportToReact} className="mx-2">Convert Code</button>
+                <button onClick={() => convertReactToHtmlCss(reactCode)} className="mx-2">Convert to HTML/CSS</button>
             </header>
             <AddElement onAdd={handleAddElement} />
             <div className="flex flex-grow overflow-hidden">
@@ -368,7 +401,10 @@ function Editor() {
                         height="100%"
                         language="javascript"
                         value={reactCode}
-                        options={{ readOnly: false }}
+                        onChange={(newReactCode) => {
+                            console.log("React code updated:", newReactCode); // Log new code for debugging
+                            setReactCode(newReactCode);
+                        }}
                         theme="vs-dark"
                     />
                 </Resizable>
@@ -376,7 +412,7 @@ function Editor() {
                     ref={iframeRef}
                     className="flex-grow"
                     style={{ border: 'none', height: '100%', width: '50%' }}
-                    sandbox="allow-scripts"
+                    sandbox="allow-scripts allow-same-origin"
                 />
                 <InteractiveCanvas elements={elements} updateElement={updateElement} onSelect={handleSelectElement} />
                 <PropertiesPanel
