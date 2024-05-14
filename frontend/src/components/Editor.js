@@ -123,6 +123,8 @@ function Editor() {
     const monacoRef = useRef();
     const [selectedElement, setSelectedElement] = useState(null);
     const [reactCode, setReactCode] = useState("");
+    const [mode, setMode] = useState("html");
+    const [reactCss, setReactCss] = useState("");
 
     const exportToReact = useCallback(() => {
         const parsedHtml = parseHtml(html);
@@ -177,47 +179,79 @@ function Editor() {
     };    
 
     const updatePreview = useCallback(() => {
-        console.log("Updating preview for reactCode:", reactCode);
+        console.log("Updating preview for mode:", mode);
         try {
-            // Manually adjust the code to not use import statements
-            let preparedCode = reactCode.replace(/import\s+\{[^}]+\}\s+from\s+'react';?/g, '');  // Remove any React import statements
-            preparedCode = `
-                var React = window.React;  // Assume React is loaded globally
-                var ReactDOM = window.ReactDOM;  // Assume ReactDOM is loaded globally
-                ${preparedCode}
-                ReactDOM.render(<App />, document.getElementById('root'));
-            `;
-    
-            const transpiledCode = Babel.transform(preparedCode, {
-                presets: ['react']  // Use React preset to handle JSX
-            }).code;
-    
-            console.log("Transpiled code:", transpiledCode);
-    
-            const srcdoc = `
-                <html>
-                    <head>
-                        <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
-                        <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
-                        <style>${css}</style>
-                    </head>
-                    <body>
-                        <div id="root"></div>
-                        <script type="text/javascript">
-                            ${transpiledCode}
-                        </script>
-                    </body>
-                </html>
-            `;
-    
+            let srcdoc = '';
+
+            if (mode === "react") {
+                // Remove import statements and handle hooks and components globally
+                let preparedCode = reactCode.replace(/import\s+[^;]+;/g, '');
+
+                // Add global references for React and ReactDOM
+                let globalReferences = `
+                    var React = window.React;
+                    var ReactDOM = window.ReactDOM;
+                `;
+
+                // Add global references for React hooks
+                const reactHooks = ['useState', 'useEffect', 'useRef', 'useCallback', 'useContext', 'useReducer', 'useMemo', 'useImperativeHandle', 'useLayoutEffect', 'useDebugValue'];
+                reactHooks.forEach(hook => {
+                    globalReferences += `var ${hook} = React.${hook};\n`;
+                });
+
+                preparedCode = `
+                    (function() {
+                        ${globalReferences}
+                        ${preparedCode}
+                        ReactDOM.render(<App />, document.getElementById('root'));
+                    })();
+                `;
+
+                const transpiledCode = Babel.transform(preparedCode, {
+                    presets: ['react']  // Use React preset to handle JSX
+                }).code;
+
+                console.log("Transpiled code:", transpiledCode);
+
+                srcdoc = `
+                    <html>
+                        <head>
+                            <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+                            <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+                            <style>${reactCss}</style>
+                        </head>
+                        <body>
+                            <div id="root"></div>
+                            <script type="text/javascript">
+                                ${transpiledCode}
+                            </script>
+                        </body>
+                    </html>
+                `;
+            } else {
+                srcdoc = `
+                    <html>
+                        <head>
+                            <style>${css}</style>
+                        </head>
+                        <body>
+                            ${html}
+                            <script>
+                                ${javascript}
+                            </script>
+                        </body>
+                    </html>
+                `;
+            }
+
             if (iframeRef.current) {
                 iframeRef.current.srcdoc = srcdoc;
             }
         } catch (error) {
-            console.error("Error in transpiling React code:", error);
+            console.error("Error in transpiling code:", error);
         }
-    }, [reactCode, css]);          
-
+    }, [reactCode, reactCss, css, html, javascript, mode]); 
+    
     const [elements, setElements] = useState([]);
 
     function convertReactToHtmlCss(reactCode) {
@@ -261,7 +295,7 @@ function Editor() {
 
     useEffect(() => {
         updatePreview();
-    }, [html, css, javascript]);
+    }, [html, css, javascript, reactCss]);
 
     const updateElement = (id, newStyle) => {
         setElements(prevElements => {
@@ -300,6 +334,13 @@ function Editor() {
             updatePreview();
         }
     }, 3000), [html, updatePreview]);
+
+    const handleReactCssChange = useCallback(debounce((newCss) => {
+        if (newCss !== reactCss) {
+            console.log("React CSS Edited:", newCss); // Log raw CSS input
+            setReactCss(newCss);
+        }
+    }, 3000), [reactCss]);
 
     const handleHtmlChange = useCallback(debounce((newHtml) => {
         if (newHtml !== html) {
@@ -366,47 +407,69 @@ function Editor() {
                 <button className="mx-2">Save</button>
                 <button onClick={exportToReact} className="mx-2">Convert Code</button>
                 <button onClick={() => convertReactToHtmlCss(reactCode)} className="mx-2">Convert to HTML/CSS</button>
+                <div>
+                    <button className={`mx-2 ${mode === 'html' ? 'bg-white text-teal-400' : ''}`} onClick={() => setMode('html')}>HTML/CSS/JS Mode</button>
+                    <button className={`mx-2 ${mode === 'react' ? 'bg-white text-teal-400' : ''}`} onClick={() => setMode('react')}>React Mode</button>
+                </div>
             </header>
             <AddElement onAdd={handleAddElement} />
             <div className="flex flex-grow overflow-hidden">
-                <Resizable
+            <Resizable
                     defaultSize={{
                         width: '50%',
                         height: '100%',
                     }}
                     style={{ display: 'flex', flexDirection: 'column' }}
                 >
-                    <MonacoEditor
-                        height="100%"
-                        language="html"
-                        value={html}
-                        onChange={setHtml}
-                        theme="vs-dark"
-                    />
-                    <MonacoEditor
-                        height="100%"
-                        language="css"
-                        value={css}
-                        onChange={setCss}
-                        theme="vs-dark"
-                    />
-                    <MonacoEditor
-                        height="100%"
-                        language="javascript"
-                        value={javascript}
-                        onChange={setJavascript}
-                        theme="vs-dark"
-                    />
-                    <MonacoEditor
-                        height="100%"
-                        language="javascript"
-                        value={reactCode}
-                        onChange={(newReactCode) => {
-                            console.log("React code updated:", newReactCode); // Log new code for debugging
-                            setReactCode(newReactCode);
-                        }}
-                        theme="vs-dark"
-                    />
+                    {mode === 'html' && (
+                        <>
+                            <MonacoEditor
+                                height="100%"
+                                language="html"
+                                value={html}
+                                onChange={setHtml}
+                                theme="vs-dark"
+                            />
+                            <MonacoEditor
+                                height="100%"
+                                language="css"
+                                value={css}
+                                onChange={setCss}
+                                theme="vs-dark"
+                            />
+                            <MonacoEditor
+                                height="100%"
+                                language="javascript"
+                                value={javascript}
+                                onChange={setJavascript}
+                                theme="vs-dark"
+                            />
+                        </>
+                    )}
+                    {mode === 'react' && (
+                        <>
+                            <MonacoEditor
+                                height="50%"
+                                language="javascript"
+                                value={reactCode}
+                                onChange={(newReactCode) => {
+                                    console.log("React code updated:", newReactCode); // Log new code for debugging
+                                    setReactCode(newReactCode);
+                                }}
+                                theme="vs-dark"
+                            />
+                            <MonacoEditor
+                                height="50%"
+                                language="css"
+                                value={reactCss}
+                                onChange={(newReactCss) => {
+                                    console.log("React CSS updated:", newReactCss); // Log new CSS for debugging
+                                    setReactCss(newReactCss);
+                                }}
+                                theme="vs-dark"
+                            />
+                        </>
+                    )}
                 </Resizable>
                 <iframe
                     ref={iframeRef}
