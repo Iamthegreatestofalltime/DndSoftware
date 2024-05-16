@@ -1,4 +1,4 @@
-/* global Babel */
+/*global Babel*/
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import { debounce } from 'lodash';
@@ -112,6 +112,16 @@ function camelCase(str) {
     return str.replace(/-([a-z])/g, function (g) { return g[1].toUpperCase(); });
 }
 
+const loadScript = (src) => {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+};
+
 function Editor() {
     const [html, setHtml] = useState("<h1>Hello, World!</h1>");
     const [css, setCss] = useState("h1 { color: red; }");
@@ -126,6 +136,7 @@ function Editor() {
     const [selectedFile, setSelectedFile] = useState(files[0]);
     const iframeRef = useRef(null);
     const [selectedElement, setSelectedElement] = useState("");
+    const [libraries, setLibraries] = useState([]); // New state for user-defined libraries
     const monacoRef = useRef();
 
     const exportToReact = useCallback(() => {
@@ -177,37 +188,44 @@ function Editor() {
         }));
     };
 
-    const updatePreview = useCallback(() => {
+    const updatePreview = useCallback(async () => {
         try {
             let srcdoc = '';
-
+    
             if (mode === "react") {
                 let jsFiles = files.filter(file => file.language === 'javascript');
                 let cssFiles = files.filter(file => file.language === 'css');
                 
                 let bundledJs = jsFiles.map(file => file.value).join('\n');
                 let bundledCss = cssFiles.map(file => file.value).join('\n');
-                
-                let preparedCode = bundledJs.replace(/import\s+[^;]+;/g, '');
-
+    
+                let preparedCode = bundledJs.replace(/import\s+[^;]+;/g, '').replace(/export\s+default\s+\w+;/g, '');
+    
                 let globalReferences = `
                     var React = window.React;
                     var ReactDOM = window.ReactDOM;
                 `;
-
+    
                 const reactHooks = ['useState', 'useEffect', 'useRef', 'useCallback', 'useContext', 'useReducer', 'useMemo', 'useImperativeHandle', 'useLayoutEffect', 'useDebugValue'];
                 reactHooks.forEach(hook => {
                     globalReferences += `var ${hook} = React.${hook};\n`;
                 });
 
+                // Load user-defined libraries
+                for (let lib of libraries) {
+                    await loadScript(lib);
+                }
+    
                 preparedCode = `
+                    ${globalReferences}
+                    ${preparedCode}
                     (function() {
                         ${globalReferences}
                         ${preparedCode}
-                        ReactDOM.render(<App />, document.getElementById('root'));
+                        ReactDOM.render(React.createElement(App), document.getElementById('root'));
                     })();
                 `;
-
+    
                 const transpiledCode = Babel.transform(preparedCode, {
                     presets: ['react']
                 }).code;
@@ -242,14 +260,14 @@ function Editor() {
                     </html>
                 `;
             }
-
+    
             if (iframeRef.current) {
                 iframeRef.current.srcdoc = srcdoc;
             }
         } catch (error) {
             console.error("Error in transpiling code:", error);
         }
-    }, [reactCode, css, html, javascript, mode, files]);
+    }, [reactCode, css, html, javascript, mode, files, libraries]); // Include libraries in the dependency array
 
     const [elements, setElements] = useState([]);
 
@@ -403,6 +421,11 @@ function Editor() {
         }
     };
 
+    // Handle adding user-defined libraries
+    const addLibrary = (url) => {
+        setLibraries([...libraries, url]);
+    };
+
     return (
         <div className="flex flex-col h-screen">
             <header className="flex justify-between bg-teal-400 p-4 text-white">
@@ -413,6 +436,19 @@ function Editor() {
                 <div>
                     <button className={`mx-2 ${mode === 'html' ? 'bg-white text-teal-400' : ''}`} onClick={() => setMode('html')}>HTML/CSS/JS Mode</button>
                     <button className={`mx-2 ${mode === 'react' ? 'bg-white text-teal-400' : ''}`} onClick={() => setMode('react')}>React Mode</button>
+                </div>
+                <div>
+                    <input
+                        type="text"
+                        placeholder="Library URL"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && e.target.value) {
+                                addLibrary(e.target.value);
+                                e.target.value = '';
+                            }
+                        }}
+                        className="mx-2 p-1 text-black"
+                    />
                 </div>
             </header>
             <AddElement onAdd={handleAddElement} />

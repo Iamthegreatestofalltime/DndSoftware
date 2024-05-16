@@ -11,6 +11,8 @@
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.6.8",
+    "codemirror": "^6.0.1",
     "framer-motion": "^11.1.5",
     "interactjs": "^1.10.27",
     "lodash": "^4.17.21",
@@ -24,6 +26,7 @@
     "react-router-dom": "^6.22.3",
     "react-scripts": "5.0.1",
     "react-split-panel": "^2.0.1",
+    "socket.io-client": "^4.7.5",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

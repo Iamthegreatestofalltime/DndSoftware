@@ -43,3 +43,45 @@
   position: relative;
   background-color: #eee; 
 }
+
+.App {
+  display: flex;
+  height: 100vh;
+}
+
+.left-pane {
+  width: 30%;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-right: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+.right-pane {
+  width: 70%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f0f0;
+}
+
+.file-manager {
+  margin-bottom: 10px;
+}
+
+.file-manager button {
+  display: block;
+  width: 100%;
+  margin-bottom: 5px;
+}
+
+button {
+  margin-top: 10px;
+}
+
+iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
