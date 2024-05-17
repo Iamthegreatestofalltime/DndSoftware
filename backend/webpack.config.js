@@ -26,9 +26,17 @@ module.exports = {
         }
       },
       {
-        test: /\.css$/,
-        use: ['style-loader', 'css-loader']
-      }
+        test: /\.css$/i,
+        use: ['style-loader', 'css-loader'],
+      },
     ]
-  }
+  },
+  resolve: {
+    extensions: ['.js', '.jsx'],
+  },
+  devServer: {
+    contentBase: path.join(__dirname, 'dist'),
+    compress: true,
+    port: 9000,
+  },
 };

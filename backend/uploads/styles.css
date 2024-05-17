@@ -1,0 +1,23 @@
+body {
+    font-family: Arial, sans-serif;
+}
+
+.navbar {
+    background-color: #007bff;
+    padding: 10px;
+}
+
+.navbar a {
+    color: white;
+    margin: 0 10px;
+    text-decoration: none;
+}
+
+.container {
+    padding: 20px;
+}
+
+.header {
+    font-size: 24px;
+    color: #333;
+}
