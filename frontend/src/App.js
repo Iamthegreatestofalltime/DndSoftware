@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import MonacoEditor from '@monaco-editor/react';
 import axios from 'axios';
+import InteractiveCanvas from './components/InteractiveCanvas'; // Make sure the path is correct
 import './App.css';
 
 function App() {
@@ -8,6 +9,7 @@ function App() {
   const [currentFile, setCurrentFile] = useState('App.js');
   const [code, setCode] = useState('');
   const [outputPath, setOutputPath] = useState('');
+  const [elements, setElements] = useState([]);
 
   useEffect(() => {
     axios.get('http://localhost:1000/files')
@@ -15,6 +17,7 @@ function App() {
         setFiles(res.data);
         if (res.data['App.js']) {
           setCode(res.data['App.js']);
+          extractElements(res.data['App.js']); // Extract elements from the initial code
         }
       })
       .catch((err) => {
@@ -22,13 +25,26 @@ function App() {
       });
   }, []);
 
+  const extractElements = (code) => {
+    axios.post('http://localhost:1000/extract-elements', { code })
+      .then((res) => {
+        console.log('Extracted Elements:', res.data); // Debug log
+        setElements(res.data);
+      })
+      .catch((err) => {
+        console.error('Failed to extract elements:', err);
+      });
+  };
+
   const handleEditorChange = (value) => {
     setCode(value);
+    extractElements(value); // Extract elements whenever the code changes
   };
 
   const handleFileChange = (file) => {
     setCurrentFile(file);
     setCode(files[file] || '');
+    extractElements(files[file] || ''); // Extract elements when file changes
   };
 
   const handleNewFile = () => {
@@ -37,6 +53,7 @@ function App() {
       setFiles({ ...files, [newFileName]: '' });
       setCurrentFile(newFileName);
       setCode('');
+      setElements([]); // Reset elements for the new file
     }
   };
 
@@ -64,6 +81,18 @@ function App() {
       });
   };
 
+  const updateElement = (id, style) => {
+    console.log('Updating element:', id, style);
+    setElements(prevElements => 
+      prevElements.map(el => (el.id === id ? { ...el, style: { ...el.style, ...style } } : el))
+    );
+
+    const styles = elements.map(el => `.${el.id} { left: ${el.style.left}; top: ${el.style.top}; position: ${el.style.position}; }`).join('\n');
+    axios.post('http://localhost:1000/save-styles', { styles })
+      .then(() => console.log('Styles updated successfully'))
+      .catch(err => console.error('Failed to update styles:', err));
+  };
+
   useEffect(() => {
     if (outputPath) {
       console.log(`Output path set to: ${outputPath}`);
@@ -82,7 +111,7 @@ function App() {
           <button onClick={handleNewFile}>New File</button>
         </div>
         <MonacoEditor
-          height="80vh"
+          height="40vh"
           language="javascript"
           theme="vs-dark"
           value={code}
@@ -92,6 +121,11 @@ function App() {
         <button onClick={handleCompile}>Compile</button>
       </div>
       <div className="right-pane">
+        <InteractiveCanvas
+          elements={elements}
+          updateElement={updateElement}
+          onSelect={(element) => console.log('Selected element:', element)}
+        />
         {outputPath && (
           <iframe
             src={`http://localhost:1000${outputPath}`}
